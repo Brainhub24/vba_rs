@@ -65,13 +65,17 @@ class CmdHttpHandler(socketserver.BaseRequestHandler):
 
 def main():
     # Initialize logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    if not logger.handlers:
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     # Get the IP address where the server is running
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
 
-    logger.info("Server is running on IP: %s", ip_address)
+    logger.info("Welcome to the Simple HTTP Server!")
+    logger.info("Server Details:")
+    logger.info("IP: %s", ip_address)
+    logger.info("Port: %s", PORT)
     logger.info("To terminate the connection, please enter 'EXIT'.")
     logger.info("Please be aware that certain commands may result in temporary system delays. If this occurs, please retry the command.")
     logger.info("")
