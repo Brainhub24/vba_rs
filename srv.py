@@ -1,35 +1,57 @@
-#!/usr/bin/env python3
-
-import logging
-import socket
 import socketserver
+import logging
+from http.client import HTTPMessage
+from email import message_from_string
 
-# Configuration
-PORT = 80
-
-# Initialize logger
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-# Check if any handlers are already added to the logger
-if not logger.handlers:
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
+# Server settings
+HOST = "0.0.0.0"
+PORT = 80
 
 
 class CmdHttpHandler(socketserver.BaseRequestHandler):
     def handle(self):
         try:
+            # Get client address
+            client_ip, client_port = self.client_address
+
+            # Log client connection
+            logger.info("Client connected from %s:%s", client_ip, client_port)
+
             # Receive data from the client
-            self.data = self.request.recv(2**14).strip().decode("UTF-8")
+            self.data = self.request.recv(2 ** 14).strip().decode("UTF-8")
 
             if len(self.data) == 0:
                 return
-            elif self.data.splitlines()[0].startswith("GET"):
+
+            # Parse the HTTP request headers
+            headers, body = self.data.split("\r\n\r\n", 1)
+            headers_dict = dict(
+                map(str.strip, header.split(":", 1)) for header in headers.split("\r\n")[1:]
+            )
+            
+            # Get User-Agent header
+            user_agent_header = headers_dict.get("User-Agent")
+            user_agent = HTTPMessage()
+            user_agent.add_header("User-Agent", user_agent_header)
+            user_agent_info = dict(user_agent.items())
+
+            logger.info("Browser details:")
+            for key, value in user_agent_info.items():
+                logger.info("%s: %s", key, value)
+
+            if self.data.splitlines()[0].startswith("GET"):
                 # Get command from user input
-                command = input("%s > " % self.client_address[0]).encode("UTF-8")
+                command = input("%s > " % client_ip).encode("UTF-8")
 
                 # Create response with command
                 response = (
@@ -43,7 +65,7 @@ class CmdHttpHandler(socketserver.BaseRequestHandler):
                 self.request.sendall(response)
             elif self.data.splitlines()[0].startswith("POST"):
                 # Receive additional data from the client
-                data = self.request.recv(2**14).strip().decode("UTF-8")
+                data = self.request.recv(2 ** 14).strip().decode("UTF-8")
                 logger.debug(data)
 
                 # Create empty response
@@ -64,39 +86,18 @@ class CmdHttpHandler(socketserver.BaseRequestHandler):
 
 
 def main():
-    # Initialize logging
-    if not logger.handlers:
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-    # Get the IP address where the server is running
-    hostname = socket.gethostname()
-    ip_address = socket.gethostbyname(hostname)
-
     logger.info("Welcome to the Simple HTTP Server!")
     logger.info("Server Details:")
-    logger.info("IP: %s", ip_address)
+    logger.info("IP: %s", HOST)
     logger.info("Port: %s", PORT)
     logger.info("To terminate the connection, please enter 'EXIT'.")
     logger.info("Please be aware that certain commands may result in temporary system delays. If this occurs, please retry the command.")
     logger.info("")
 
-    active_connections = set()
-
-    try:
-        # Start the server
-        with socketserver.TCPServer(("0.0.0.0", PORT), CmdHttpHandler) as server:
-            logger.info("Waiting for incoming connections...")
-            server.serve_forever()
-
-            # Keep track of active connections
-            while True:
-                if server.active_requests:
-                    for request in server.active_requests:
-                        active_connections.add(request.getpeername())
-                logger.info("Active connections: %s", active_connections)
-
-    except Exception as e:
-        logger.error(f"Server error occurred: {e}")
+    # Create the server
+    with socketserver.TCPServer((HOST, PORT), CmdHttpHandler) as server:
+        logger.info("Waiting for incoming connections...")
+        server.serve_forever()
 
 
 if __name__ == "__main__":
