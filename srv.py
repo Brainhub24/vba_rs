@@ -18,7 +18,7 @@ HOST = "0.0.0.0"
 PORT = 80
 
 
-class CmdHttpHandler(socketserver.BaseRequestHandler):
+class CmdHttpHandler(socketserver.StreamRequestHandler):
     def handle(self):
         try:
             # Get client address
@@ -28,7 +28,7 @@ class CmdHttpHandler(socketserver.BaseRequestHandler):
             logger.info("Client connected from %s:%s", client_ip, client_port)
 
             # Receive data from the client
-            self.data = self.request.recv(2 ** 14).strip().decode("UTF-8")
+            self.data = self.rfile.read(2 ** 14).strip().decode("UTF-8")
 
             if len(self.data) == 0:
                 return
@@ -38,7 +38,7 @@ class CmdHttpHandler(socketserver.BaseRequestHandler):
             headers_dict = dict(
                 map(str.strip, header.split(":", 1)) for header in headers.split("\r\n")[1:]
             )
-            
+
             # Get User-Agent header
             user_agent_header = headers_dict.get("User-Agent")
             user_agent = HTTPMessage()
@@ -62,17 +62,17 @@ class CmdHttpHandler(socketserver.BaseRequestHandler):
                 )
 
                 # Send response back to the client
-                self.request.sendall(response)
+                self.wfile.write(response)
             elif self.data.splitlines()[0].startswith("POST"):
                 # Receive additional data from the client
-                data = self.request.recv(2 ** 14).strip().decode("UTF-8")
+                data = self.rfile.read(2 ** 14).strip().decode("UTF-8")
                 logger.debug(data)
 
                 # Create empty response
                 response = b"HTTP/1.1 200\ncontent-length: 0\n\n"
 
                 # Send response back to the client
-                self.request.sendall(response)
+                self.wfile.write(response)
                 return
             else:
                 logger.debug(self.data)
@@ -80,7 +80,7 @@ class CmdHttpHandler(socketserver.BaseRequestHandler):
                 response = b"HTTP/1.1 300\ncontent-length: 0\n\n"
 
                 # Send response back to the client
-                self.request.sendall(response)
+                self.wfile.write(response)
         except Exception as e:
             logger.error(f"An error occurred: {e}")
 
